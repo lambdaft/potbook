@@ -7,18 +7,18 @@ from datetime import datetime
 # ==========================================
 # 1. PAGE CONFIGURATION
 # ==========================================
-st.set_page_config(page_title="Market Dashboard", layout="wide")
+st.set_page_config(page_title="Market Matrix Dashboard", page_icon="📊", layout="wide")
 
 # Create the two main tabs
-tab1, tab2 = st.tabs(["Results", "Selector"])
+tab1, tab2 = st.tabs(["📊 Live Market Results", "🎛️ Number Selector"])
 
 # ==========================================
 # 2. TAB 1: LIVE MARKET RESULTS
 # ==========================================
 with tab1:
-    # st.title("📊 Live Market Results Dashboard")
+    st.title("📊 Live Market Results Dashboard")
 
-    # Updated with the 5 new markets at the end
+    # The clean display sequence sequence order
     TARGET_MARKETS = [
         "SRIDEVI",
         "TIME BAZAR",
@@ -65,9 +65,27 @@ with tab1:
 
             for h4 in market_headers:
                 market_name = h4.text.strip().upper()
+
                 matched_base = None
-                for target in TARGET_MARKETS:
-                    if target in market_name or market_name in target:
+                # Sort targets by length descending so longer specific names (e.g. "SRIDEVI NIGHT")
+                # are checked before shorter substrings (e.g. "SRIDEVI")
+                for target in sorted(TARGET_MARKETS, key=len, reverse=True):
+                    if target == market_name:
+                        matched_base = target
+                        break
+
+                    if target in market_name:
+                        # CRITICAL FIXES FOR LOOSE MATCHING OVERLAPS:
+                        # 1. Prevent regular markets matching their NIGHT versions (e.g., KALYAN NIGHT matching KALYAN)
+                        if "NIGHT" in market_name and "NIGHT" not in target:
+                            continue
+                        # 2. Prevent night markets matching with misleading DAY labels if any
+                        if "DAY" in market_name and "NIGHT" in target:
+                            continue
+                        # 3. Prevent regular markets matching with MORNING versions (e.g., KALYAN MORNING matching KALYAN)
+                        if "MORNING" in market_name and "MORNING" not in target:
+                            continue
+
                         matched_base = target
                         break
 
@@ -136,6 +154,7 @@ with tab1:
 
                 market_name = name_tag.text.strip().upper()
 
+                # Satta King matches are completely clean because they target strict exact items
                 if market_name in target_satta_markets:
                     time_tag = row.find("h3", class_="game-time")
                     today_tag = row.find("td", class_="today-number")
@@ -164,7 +183,7 @@ with tab1:
     col_space, col_btn = st.columns([5, 1])
     with col_btn:
         refresh_triggered = st.button(
-            "🔄🔄🔄🔄🔄", use_container_width=True, key="market_refresh_btn"
+            "🔄 Refresh Table", use_container_width=True, key="market_refresh_btn"
         )
 
     # Combine data from both scrapers
@@ -173,7 +192,7 @@ with tab1:
             dpboss_data = fetch_live_data()
             satta_data = fetch_satta_data()
 
-            # Merge both lists together
+            # Merge both lists together cleanly
             combined_data = dpboss_data + satta_data
 
             st.session_state["cached_table_data"] = combined_data
@@ -190,10 +209,10 @@ with tab1:
 
     if isinstance(live_rows, list) and len(live_rows) > 0:
         df = pd.DataFrame(live_rows)
-        # Drop any accidental cross-site duplicates based on name
+        # Drop any cross-site duplication hazards perfectly based on unique Market Name
         df = df.drop_duplicates(subset=["Market Name"], keep="first")
 
-        # Sort using the main TARGET_MARKETS list order
+        # Sort using the main TARGET_MARKETS list sequence order
         df["Market Name"] = pd.Categorical(
             df["Market Name"], categories=TARGET_MARKETS, ordered=True
         )
@@ -208,7 +227,7 @@ with tab1:
 # 3. TAB 2: NUMBER SELECTOR
 # ==========================================
 with tab2:
-    # st.title("🎛️ Number Selector & Matrix")
+    st.title("🎛️ Number Selector & Matrix")
 
     # Initialize selector session states if not present
     if "first_digit_filter" not in st.session_state:
