@@ -7,7 +7,7 @@ from datetime import datetime
 # ==========================================
 # 1. PAGE CONFIGURATION
 # ==========================================
-st.set_page_config(page_title="Matrix Dashboard", page_icon=":streamlit:", layout="wide")
+st.set_page_config(page_title="Market Dashboard", layout="wide")
 
 # Create the two main tabs
 tab1, tab2 = st.tabs(["Results", "Selector"])
@@ -16,8 +16,9 @@ tab1, tab2 = st.tabs(["Results", "Selector"])
 # 2. TAB 1: LIVE MARKET RESULTS
 # ==========================================
 with tab1:
-    #st.title(":moneybag::moneybag::moneybag:")
+    # st.title("📊 Live Market Results Dashboard")
 
+    # Updated with the 5 new markets at the end
     TARGET_MARKETS = [
         "SRIDEVI",
         "TIME BAZAR",
@@ -28,6 +29,11 @@ with tab1:
         "MAIN BAZAR",
         "MILAN NIGHT",
         "RAJDHANI NIGHT",
+        "DESAWAR",
+        "SHRI GANESH",
+        "FARIDABAD",
+        "GHAZIABAD",
+        "GALI",
     ]
 
     def convert_to_24h(time_str):
@@ -40,6 +46,7 @@ with tab1:
             return "N/A"
 
     def fetch_live_data():
+        """Fetches data from the first source: dpbossss.boston"""
         url = "https://dpbossss.boston/"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -47,7 +54,9 @@ with tab1:
         try:
             response = requests.get(url, headers=headers, timeout=15)
             if response.status_code != 200:
-                st.error(f"Failed to fetch data. Status code: {response.status_code}")
+                st.error(
+                    f"Failed to fetch primary data. Status code: {response.status_code}"
+                )
                 return []
 
             soup = BeautifulSoup(response.text, "html.parser")
@@ -82,28 +91,92 @@ with tab1:
 
                     extracted_data.append(
                         {
-                            "Market": matched_base,
-                            "Result": result_numbers,
-                            "Open": open_24h,
-                            "Close": close_24h,
+                            "Market Name": matched_base,
+                            "Live Digits / Result": result_numbers,
+                            "Open Time": open_24h,
+                            "Close Time": close_24h,
                         }
                     )
             return extracted_data
         except Exception as e:
-            st.error(f"An error occurred: {e}")
+            st.error(f"An error occurred fetching primary data: {e}")
+            return []
+
+    def fetch_satta_data():
+        """Fetches data from the second source: satta-king-up.com"""
+        url = "https://satta-king-up.com/desawar/satta-result-chart/ds/"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+
+        target_satta_markets = [
+            "DESAWAR",
+            "SHRI GANESH",
+            "FARIDABAD",
+            "GHAZIABAD",
+            "GALI",
+        ]
+        extracted_data = []
+
+        try:
+            response = requests.get(url, headers=headers, timeout=15)
+            if response.status_code != 200:
+                st.error(
+                    f"Failed to fetch secondary Satta data. Status: {response.status_code}"
+                )
+                return []
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            rows = soup.find_all("tr", class_=lambda c: c and "game-result" in c)
+
+            for row in rows:
+                name_tag = row.find("h3", class_="game-name")
+                if not name_tag:
+                    continue
+
+                market_name = name_tag.text.strip().upper()
+
+                if market_name in target_satta_markets:
+                    time_tag = row.find("h3", class_="game-time")
+                    today_tag = row.find("td", class_="today-number")
+
+                    raw_time = (
+                        time_tag.text.replace("at", "").strip() if time_tag else "N/A"
+                    )
+                    time_24h = convert_to_24h(raw_time) if raw_time != "N/A" else "N/A"
+                    today_number = today_tag.text.strip() if today_tag else "XX"
+
+                    extracted_data.append(
+                        {
+                            "Market Name": market_name,
+                            "Live Digits / Result": today_number,
+                            "Open Time": "N/A",
+                            "Close Time": time_24h,
+                        }
+                    )
+
+            return extracted_data
+        except Exception as e:
+            st.error(f"Secondary Satta scraper error: {e}")
             return []
 
     # Layout for refresh button
     col_space, col_btn = st.columns([5, 1])
     with col_btn:
         refresh_triggered = st.button(
-            "🔄🔄🔄🔄", use_container_width=True, key="market_refresh_btn"
+            "🔄🔄🔄🔄🔄", use_container_width=True, key="market_refresh_btn"
         )
 
+    # Combine data from both scrapers
     if refresh_triggered or "cached_table_data" not in st.session_state:
-        with st.spinner("Fetching latest updates..."):
-            data = fetch_live_data()
-            st.session_state["cached_table_data"] = data
+        with st.spinner("Fetching latest updates from all sources..."):
+            dpboss_data = fetch_live_data()
+            satta_data = fetch_satta_data()
+
+            # Merge both lists together
+            combined_data = dpboss_data + satta_data
+
+            st.session_state["cached_table_data"] = combined_data
             st.session_state["last_updated_time"] = datetime.now().strftime(
                 "%I:%M:%S %p"
             )
@@ -117,11 +190,15 @@ with tab1:
 
     if isinstance(live_rows, list) and len(live_rows) > 0:
         df = pd.DataFrame(live_rows)
-        df = df.drop_duplicates(subset=["Market"], keep="first")
-        df["Market"] = pd.Categorical(
-            df["Market"], categories=TARGET_MARKETS, ordered=True
+        # Drop any accidental cross-site duplicates based on name
+        df = df.drop_duplicates(subset=["Market Name"], keep="first")
+
+        # Sort using the main TARGET_MARKETS list order
+        df["Market Name"] = pd.Categorical(
+            df["Market Name"], categories=TARGET_MARKETS, ordered=True
         )
-        df = df.sort_values("Market").reset_index(drop=True)
+        df = df.sort_values("Market Name").reset_index(drop=True)
+
         st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.warning("Waiting for data. Click 'Refresh Table' to pull live feeds.")
@@ -131,7 +208,7 @@ with tab1:
 # 3. TAB 2: NUMBER SELECTOR
 # ==========================================
 with tab2:
-    # st.title("Selection Matrix")
+    # st.title("🎛️ Number Selector & Matrix")
 
     # Initialize selector session states if not present
     if "first_digit_filter" not in st.session_state:
@@ -148,7 +225,6 @@ with tab2:
         return num % 10
 
     def matches_filters(num, first_filter, second_filter, range_filter):
-        # Check first digit filter
         first_d = get_first_digit(num)
         if first_filter["odd"] or first_filter["even"]:
             first_matches = False
@@ -159,7 +235,6 @@ with tab2:
             if not first_matches:
                 return False
 
-        # Check second digit filter
         second_d = get_second_digit(num)
         if second_filter["odd"] or second_filter["even"]:
             second_matches = False
@@ -170,7 +245,6 @@ with tab2:
             if not second_matches:
                 return False
 
-        # Check range filter
         if range_filter["below_mid"] or range_filter["above_mid"]:
             range_matches = False
             if range_filter["below_mid"] and num < 50:
@@ -187,7 +261,7 @@ with tab2:
 
     with right_col:
         if st.button(
-            "🔄🔄🔄🔄🔄", use_container_width=False, key="selector_reset_btn"
+            "🔄 Reset All Filters", use_container_width=False, key="selector_reset_btn"
         ):
             st.session_state.first_choice = "All"
             st.session_state.second_choice = "All"
@@ -196,7 +270,6 @@ with tab2:
 
         st.divider()
 
-        # 1. Range (Partition)
         st.write("**Partition**")
         range_choice = st.radio(
             "Range",
@@ -208,7 +281,6 @@ with tab2:
         below_mid = range_choice == "BM"
         above_mid = range_choice == "AM"
 
-        # 2. Last Digit (Closing)
         st.write("**Closing**")
         second_choice = st.radio(
             "Last Digit",
@@ -220,7 +292,6 @@ with tab2:
         second_odd = second_choice == "O"
         second_even = second_choice == "E"
 
-        # 3. Tens Digit (Opening)
         st.write("**Opening**")
         first_choice = st.radio(
             "Tens Digit",
@@ -232,12 +303,10 @@ with tab2:
         first_odd = first_choice == "O"
         first_even = first_choice == "E"
 
-        # Create localized filter dictionaries
         first_digit_filter = {"odd": first_odd, "even": first_even}
         second_digit_filter = {"odd": second_odd, "even": second_even}
         range_filter = {"below_mid": below_mid, "above_mid": above_mid}
 
-        # Calculate matching sets
         all_numbers = list(range(0, 100))
         filtered_numbers = [
             num
@@ -252,7 +321,6 @@ with tab2:
         st.info(f"{result_text if filtered_numbers else 'Select filters'}")
         st.divider()
 
-        # Metrics display
         col1, col2, col3 = st.columns(3)
         col1.metric("Total", 100)
         col2.metric("Match", len(filtered_numbers))
