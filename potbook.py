@@ -7,16 +7,16 @@ from datetime import datetime
 # ==========================================
 # 1. PAGE CONFIGURATION
 # ==========================================
-st.set_page_config(page_title="Market Matrix Dashboard", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Matrix Dashboard", page_icon="📊", layout="wide")
 
 # Create the two main tabs
-tab1, tab2 = st.tabs(["📊 Live Market Results", "🎛️ Number Selector"])
+tab1, tab2 = st.tabs(["Results", "Selector"])
 
 # ==========================================
 # 2. TAB 1: LIVE MARKET RESULTS
 # ==========================================
 with tab1:
-    st.title("📊 Live Market Results Dashboard")
+    # st.title("📊 Live Market Results Dashboard")
 
     # The clean display sequence sequence order
     TARGET_MARKETS = [
@@ -227,7 +227,7 @@ with tab1:
 # 3. TAB 2: NUMBER SELECTOR
 # ==========================================
 with tab2:
-    st.title("🎛️ Number Selector & Matrix")
+    # st.title("🎛️ Number Selector & Matrix")
 
     # Initialize selector session states if not present
     if "first_digit_filter" not in st.session_state:
