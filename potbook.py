@@ -16,8 +16,6 @@ tab1, tab2 = st.tabs(["Results", "Selector"])
 # 2. TAB 1: LIVE MARKET RESULTS
 # ==========================================
 with tab1:
-    # st.title("📊 Live Market Results Dashboard")
-
     # The clean display sequence sequence order
     TARGET_MARKETS = [
         "SRIDEVI",
@@ -67,22 +65,16 @@ with tab1:
                 market_name = h4.text.strip().upper()
 
                 matched_base = None
-                # Sort targets by length descending so longer specific names (e.g. "SRIDEVI NIGHT")
-                # are checked before shorter substrings (e.g. "SRIDEVI")
                 for target in sorted(TARGET_MARKETS, key=len, reverse=True):
                     if target == market_name:
                         matched_base = target
                         break
 
                     if target in market_name:
-                        # CRITICAL FIXES FOR LOOSE MATCHING OVERLAPS:
-                        # 1. Prevent regular markets matching their NIGHT versions (e.g., KALYAN NIGHT matching KALYAN)
                         if "NIGHT" in market_name and "NIGHT" not in target:
                             continue
-                        # 2. Prevent night markets matching with misleading DAY labels if any
                         if "DAY" in market_name and "NIGHT" in target:
                             continue
-                        # 3. Prevent regular markets matching with MORNING versions (e.g., KALYAN MORNING matching KALYAN)
                         if "MORNING" in market_name and "MORNING" not in target:
                             continue
 
@@ -154,7 +146,6 @@ with tab1:
 
                 market_name = name_tag.text.strip().upper()
 
-                # Satta King matches are completely clean because they target strict exact items
                 if market_name in target_satta_markets:
                     time_tag = row.find("h3", class_="game-time")
                     today_tag = row.find("td", class_="today-number")
@@ -192,7 +183,6 @@ with tab1:
             dpboss_data = fetch_live_data()
             satta_data = fetch_satta_data()
 
-            # Merge both lists together cleanly
             combined_data = dpboss_data + satta_data
 
             st.session_state["cached_table_data"] = combined_data
@@ -209,10 +199,8 @@ with tab1:
 
     if isinstance(live_rows, list) and len(live_rows) > 0:
         df = pd.DataFrame(live_rows)
-        # Drop any cross-site duplication hazards perfectly based on unique Market Name
         df = df.drop_duplicates(subset=["Market Name"], keep="first")
 
-        # Sort using the main TARGET_MARKETS list sequence order
         df["Market Name"] = pd.Categorical(
             df["Market Name"], categories=TARGET_MARKETS, ordered=True
         )
@@ -227,8 +215,6 @@ with tab1:
 # 3. TAB 2: NUMBER SELECTOR
 # ==========================================
 with tab2:
-    # st.title("🎛️ Number Selector & Matrix")
-
     # Initialize selector session states if not present
     if "first_digit_filter" not in st.session_state:
         st.session_state.first_digit_filter = {"odd": False, "even": False}
@@ -243,7 +229,8 @@ with tab2:
     def get_second_digit(num):
         return num % 10
 
-    def matches_filters(num, first_filter, second_filter, range_filter):
+    def matches_filters(num, first_filter, second_filter, range_filter, quad_filter):
+        # 1. Check Tens Digit (Opening)
         first_d = get_first_digit(num)
         if first_filter["odd"] or first_filter["even"]:
             first_matches = False
@@ -254,6 +241,7 @@ with tab2:
             if not first_matches:
                 return False
 
+        # 2. Check Last Digit (Closing)
         second_d = get_second_digit(num)
         if second_filter["odd"] or second_filter["even"]:
             second_matches = False
@@ -264,6 +252,7 @@ with tab2:
             if not second_matches:
                 return False
 
+        # 3. Check Partition (Range)
         if range_filter["below_mid"] or range_filter["above_mid"]:
             range_matches = False
             if range_filter["below_mid"] and num < 50:
@@ -271,6 +260,20 @@ with tab2:
             if range_filter["above_mid"] and num >= 50:
                 range_matches = True
             if not range_matches:
+                return False
+
+        # 4. Check Quadrant
+        if quad_filter["q1"] or quad_filter["q2"] or quad_filter["q3"] or quad_filter["q4"]:
+            quad_matches = False
+            if quad_filter["q1"] and 0 <= num <= 24:
+                quad_matches = True
+            if quad_filter["q2"] and 25 <= num <= 49:
+                quad_matches = True
+            if quad_filter["q3"] and 50 <= num <= 74:
+                quad_matches = True
+            if quad_filter["q4"] and 75 <= num <= 99:
+                quad_matches = True
+            if not quad_matches:
                 return False
 
         return True
@@ -285,6 +288,7 @@ with tab2:
             st.session_state.first_choice = "All"
             st.session_state.second_choice = "All"
             st.session_state.range_choice = "All"
+            st.session_state.quadrant_choice = "All"
             st.rerun()
 
         st.divider()
@@ -299,6 +303,21 @@ with tab2:
         )
         below_mid = range_choice == "BM"
         above_mid = range_choice == "AM"
+
+        # NEW FEATURE: Quadrant
+        st.write("**Quadrant**")
+        quadrant_choice = st.radio(
+            "Quadrant",
+            ["All", "Q1", "Q2", "Q3", "Q4"],
+            key="quadrant_choice",
+            horizontal=True,
+            label_visibility="collapsed",
+            help="Q1: 00-24 | Q2: 25-49 | Q3: 50-74 | Q4: 75-99"
+        )
+        q1_active = quadrant_choice == "Q1"
+        q2_active = quadrant_choice == "Q2"
+        q3_active = quadrant_choice == "Q3"
+        q4_active = quadrant_choice == "Q4"
 
         st.write("**Closing**")
         second_choice = st.radio(
@@ -322,16 +341,23 @@ with tab2:
         first_odd = first_choice == "O"
         first_even = first_choice == "E"
 
+        # Construct filter dictionaries
         first_digit_filter = {"odd": first_odd, "even": first_even}
         second_digit_filter = {"odd": second_odd, "even": second_even}
         range_filter = {"below_mid": below_mid, "above_mid": above_mid}
+        quad_filter = {
+            "q1": q1_active,
+            "q2": q2_active,
+            "q3": q3_active,
+            "q4": q4_active
+        }
 
         all_numbers = list(range(0, 100))
         filtered_numbers = [
             num
             for num in all_numbers
             if matches_filters(
-                num, first_digit_filter, second_digit_filter, range_filter
+                num, first_digit_filter, second_digit_filter, range_filter, quad_filter
             )
         ]
 
@@ -346,13 +372,12 @@ with tab2:
         col3.metric("Out", 100 - len(filtered_numbers))
 
     with left_col:
+        # Check if ANY filter is active
         has_active_filters = (
-            first_odd
-            or first_even
-            or second_odd
-            or second_even
-            or below_mid
-            or above_mid
+            first_odd or first_even or 
+            second_odd or second_even or 
+            below_mid or above_mid or 
+            q1_active or q2_active or q3_active or q4_active
         )
 
         grid_html = """
