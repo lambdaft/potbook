@@ -319,6 +319,17 @@ with tab2:
         q3_active = quadrant_choice == "Q3"
         q4_active = quadrant_choice == "Q4"
 
+        st.write("**Opening**")
+        first_choice = st.radio(
+            "Tens Digit",
+            ["A", "O", "E"],
+            key="first_choice",
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        first_odd = first_choice == "O"
+        first_even = first_choice == "E"
+
         st.write("**Closing**")
         second_choice = st.radio(
             "Last Digit",
@@ -330,16 +341,7 @@ with tab2:
         second_odd = second_choice == "O"
         second_even = second_choice == "E"
 
-        st.write("**Opening**")
-        first_choice = st.radio(
-            "Tens Digit",
-            ["A", "O", "E"],
-            key="first_choice",
-            horizontal=True,
-            label_visibility="collapsed",
-        )
-        first_odd = first_choice == "O"
-        first_even = first_choice == "E"
+
 
         # Construct filter dictionaries
         first_digit_filter = {"odd": first_odd, "even": first_even}
